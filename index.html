@@ -251,15 +251,18 @@ function filteredData() {
 
 function buildGrid() {
   const data = filteredData();
-  const today = new Date(); today.setFullYear(today.getFullYear()); today.setHours(0,0,0,0);
-  const todayKey = today.toISOString().slice(0,10);
-  // If we have data keys, make sure today covers the latest entry
+  // Anchor grid end to the later of: browser today, or latest data key
+  const browserToday = new Date(); browserToday.setHours(0,0,0,0);
   const allKeys = Object.keys(data).sort();
   const latestKey = allKeys[allKeys.length - 1];
-  if (latestKey && latestKey > todayKey) {
-    const parts = latestKey.split('-');
-    today.setFullYear(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+  let today = new Date(browserToday);
+  if (latestKey) {
+    const [y,m,d] = latestKey.split('-').map(Number);
+    const dataDate = new Date(y, m-1, d);
+    if (dataDate > today) today = dataDate;
   }
+  // Always add one extra day so the last entry is never clipped
+  today.setDate(today.getDate() + 1);
   const start = new Date(today); start.setDate(start.getDate() - 365);
 
   const counts = Object.values(data).map(t => t.length);
