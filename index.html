@@ -179,9 +179,15 @@ async function loadData() {
         const rawTasks = props.Tasks?.rich_text?.[0]?.plain_text || '';
         let tasks = [];
         if (rawTasks.trim()) {
-          // Each entry is like "task name(ListName)" - split on the comma AFTER closing paren
-          const entries = rawTasks.split(/(?<=\)),/);
-          tasks = entries.map(s => s.trim()).filter(Boolean).map(entry => {
+          tasks = rawTasks.split(',').reduce((acc, part) => {
+            if (acc.length === 0 || acc[acc.length-1].endsWith(')')) {
+              acc.push(part);
+            } else {
+              acc[acc.length-1] += ',' + part;
+            }
+            return acc;
+          }, []).map(entry => {
+            entry = entry.trim();
             const parenStart = entry.lastIndexOf('(');
             const parenEnd = entry.lastIndexOf(')');
             if (parenStart > 0 && parenEnd > parenStart) {
