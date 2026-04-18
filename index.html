@@ -179,11 +179,17 @@ async function loadData() {
         const rawTasks = props.Tasks?.rich_text?.[0]?.plain_text || '';
         let tasks = [];
         if (rawTasks.trim()) {
-          tasks = rawTasks.split(',').map(s => s.trim()).filter(Boolean).map(entry => {
-            // Match "task name(List Name)" — list name is in the last (...)
-            const match = entry.match(/^(.*)\(([^)]+)\)\s*$/);
-            if (match) return { name: match[1].trim(), list: match[2].trim() };
-            // No list found — treat whole string as task name, list = "Unknown"
+          // Each entry is like "task name(ListName)" - split on the comma AFTER closing paren
+          const entries = rawTasks.split(/(?<=\)),/);
+          tasks = entries.map(s => s.trim()).filter(Boolean).map(entry => {
+            const parenStart = entry.lastIndexOf('(');
+            const parenEnd = entry.lastIndexOf(')');
+            if (parenStart > 0 && parenEnd > parenStart) {
+              return {
+                name: entry.slice(0, parenStart).trim(),
+                list: entry.slice(parenStart + 1, parenEnd).trim()
+              };
+            }
             return { name: entry, list: 'Unknown' };
           });
         }
@@ -261,8 +267,8 @@ function buildGrid() {
     const dataDate = new Date(y, m-1, d);
     if (dataDate > today) today = dataDate;
   }
-  // Always add one extra day so the last entry is never clipped
-  today.setDate(today.getDate() + 1);
+  // Add 2 day buffer so today is always in the grid
+  today.setDate(today.getDate() + 2);
   const start = new Date(today); start.setDate(start.getDate() - 365);
 
   const counts = Object.values(data).map(t => t.length);
