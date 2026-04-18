@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reminders Heatmap</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #1a1a1a; padding: 2rem; max-width: 900px; }
+  @media (prefers-color-scheme: dark) { body { background: #111; color: #f0f0f0; } }
+
+  h1 { font-size: 18px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
+
+  /* CONFIG PANEL */
+  #config { background: #f7f5f0; border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; }
+  @media (prefers-color-scheme: dark) { #config { background: #1e1e1e; } }
+  #config h2 { font-size: 13px; font-weight: 500; margin-bottom: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+  .config-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .config-row label { font-size: 12px; color: #888; }
+  .config-row input { font-size: 13px; padding: 7px 10px; border-radius: 6px; border: 0.5px solid #d0cec8; background: #fff; color: #1a1a1a; width: 100%; font-family: monospace; }
+  @media (prefers-color-scheme: dark) { .config-row input { background: #2a2a2a; border-color: #444; color: #f0f0f0; } }
+  #load-btn { font-size: 13px; padding: 8px 20px; border-radius: 6px; border: none; background: #1a1a1a; color: #fff; cursor: pointer; font-weight: 500; }
+  @media (prefers-color-scheme: dark) { #load-btn { background: #f0f0f0; color: #111; } }
+  #load-btn:hover { opacity: 0.85; }
+  #status { font-size: 12px; color: #888; margin-top: 8px; min-height: 18px; }
+
+  /* STATS */
+  .stats { display: flex; gap: 10px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .stat-card { background: #f7f5f0; border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 100px; }
+  @media (prefers-color-scheme: dark) { .stat-card { background: #1e1e1e; } }
+  .stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .stat-value { font-size: 20px; font-weight: 500; }
+
+  /* FILTERS */
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1rem; }
+  .filter-btn { font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 0.5px solid #d0cec8; background: transparent; color: #666; cursor: pointer; }
+  @media (prefers-color-scheme: dark) { .filter-btn { border-color: #444; color: #aaa; } }
+  .filter-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  @media (prefers-color-scheme: dark) { .filter-btn.active { background: #f0f0f0; color: #111; border-color: #f0f0f0; } }
+
+  /* GRID */
+  .grid-wrap { overflow-x: auto; padding-bottom: 6px; }
+  .grid-outer { display: flex; gap: 3px; align-items: flex-start; min-width: max-content; }
+  .day-labels { display: flex; flex-direction: column; gap: 3px; margin-top: 20px; margin-right: 4px; }
+  .day-label { height: 13px; font-size: 10px; color: #aaa; display: flex; align-items: center; }
+  .month-row { display: flex; gap: 3px; margin-bottom: 4px; }
+  .month-label { font-size: 10px; color: #aaa; height: 16px; white-space: nowrap; }
+  .grid { display: flex; gap: 3px; }
+  .col { display: flex; flex-direction: column; gap: 3px; }
+  .cell { width: 13px; height: 13px; border-radius: 2px; cursor: pointer; transition: opacity 0.1s; }
+  .cell:hover { opacity: 0.7; }
+  .legend { display: flex; align-items: center; gap: 5px; margin-top: 8px; justify-content: flex-end; font-size: 11px; color: #aaa; }
+  .legend-cells { display: flex; gap: 3px; }
+
+  /* PANEL */
+  #day-panel { display: none; margin-top: 1.5rem; background: #fff; border: 0.5px solid #e0ddd6; border-radius: 10px; padding: 1rem 1.25rem; }
+  @media (prefers-color-scheme: dark) { #day-panel { background: #1e1e1e; border-color: #333; } }
+  .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .panel-title { font-size: 14px; font-weight: 500; }
+  .close-btn { background: none; border: none; font-size: 16px; cursor: pointer; color: #888; padding: 0; }
+  .task-item { font-size: 13px; padding: 7px 0; border-bottom: 0.5px solid #f0ede6; display: flex; align-items: center; gap: 8px; }
+  @media (prefers-color-scheme: dark) { .task-item { border-color: #2a2a2a; } }
+  .task-item:last-child { border-bottom: none; }
+  .check { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #1D9E75; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .check-inner { width: 7px; height: 7px; border-radius: 50%; background: #1D9E75; }
+  .list-tag { font-size: 11px; color: #888; display: flex; align-items: center; gap: 3px; margin-left: auto; }
+  .list-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .empty { font-size: 13px; color: #888; }
+
+  /* PLACEHOLDER */
+  #placeholder { text-align: center; padding: 3rem 0; color: #aaa; }
+  #placeholder p { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>Reminders heatmap</h1>
+<p class="subtitle">Completed tasks over the last 12 months</p>
+
+<div id="config">
+  <h2>Configuration</h2>
+  <div class="config-row">
+    <label>Notion Integration Token</label>
+    <input type="password" id="token" placeholder="secret_xxxxxxxxxxxxxxxx" />
+  </div>
+  <div class="config-row">
+    <label>Notion Database ID</label>
+    <input type="text" id="db-id" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+  </div>
+  <button id="load-btn" onclick="loadData()">Load data</button>
+  <p id="status"></p>
+  <p style="font-size: 11px; color: #aaa; margin-top: 8px;">Your token is never sent anywhere except directly to Notion's API. Nothing is stored.</p>
+</div>
+
+<div id="main" style="display:none;">
+  <div class="stats">
+    <div class="stat-card"><div class="stat-label">Total completed</div><div class="stat-value" id="stat-total">—</div></div>
+    <div class="stat-card"><div class="stat-label">Best day</div><div class="stat-value" id="stat-best">—</div></div>
+    <div class="stat-card"><div class="stat-label">Current streak</div><div class="stat-value" id="stat-streak">—</div></div>
+    <div class="stat-card"><div class="stat-label">Active days</div><div class="stat-value" id="stat-active">—</div></div>
+  </div>
+
+  <div class="filters" id="filters"></div>
+
+  <div class="grid-wrap">
+    <div class="grid-outer">
+      <div class="day-labels" id="day-labels"></div>
+      <div>
+        <div class="month-row" id="month-labels"></div>
+        <div class="grid" id="grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span>Less</span>
+    <div class="legend-cells" id="legend"></div>
+    <span>More</span>
+  </div>
+
+  <div id="day-panel">
+    <div class="panel-header">
+      <span class="panel-title" id="panel-date"></span>
+      <button class="close-btn" onclick="document.getElementById('day-panel').style.display='none'">✕</button>
+    </div>
+    <div id="panel-tasks"></div>
+  </div>
+</div>
+
+<div id="placeholder">
+  <p>Enter your Notion token and database ID above, then click "Load data".</p>
+  <p style="margin-top: 8px; font-size: 12px;">See the setup guide for how to get these values.</p>
+</div>
+
+<script>
+const COLORS_LIGHT = ['#f1efed','#9FE1CB','#5DCAA5','#1D9E75','#0F6E56'];
+const COLORS_DARK  = ['#1a1a1a','#085041','#0F6E56','#1D9E75','#5DCAA5'];
+const LIST_COLORS  = ['#378ADD','#1D9E75','#D85A30','#BA7517','#9B59B6','#E84393'];
+
+let dayData   = {};   // { "YYYY-MM-DD": [ {name, list}, ... ] }
+let allLists  = [];
+let activeList = 'all';
+
+async function loadData() {
+  const token = document.getElementById('token').value.trim();
+  const dbId  = document.getElementById('db-id').value.trim().replace(/-/g,'');
+  if (!token || !dbId) { setStatus('Please enter both your token and database ID.'); return; }
+
+  setStatus('Loading…');
+  dayData = {};
+  allLists = [];
+
+  try {
+    let hasMore = true, cursor = null;
+    while (hasMore) {
+      const body = { page_size: 100 };
+      if (cursor) body.start_cursor = cursor;
+
+      const res = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        setStatus('Error: ' + (err.message || res.status)); return;
+      }
+
+      const data = await res.json();
+      hasMore = data.has_more;
+      cursor  = data.next_cursor;
+
+      data.results.forEach(page => {
+        const props = page.properties;
+        // "Date" is Title property → YYYY-MM-DD string
+        const dateTitle = props.Date?.title?.[0]?.plain_text || '';
+        if (!dateTitle.match(/^\d{4}-\d{2}-\d{2}$/)) return;
+
+        // "Tasks" is rich_text → plain string like "task 1(Main),task 2(Work),task 3(Main)"
+        const rawTasks = props.Tasks?.rich_text?.[0]?.plain_text || '';
+        let tasks = [];
+        if (rawTasks.trim()) {
+          tasks = rawTasks.split(',').map(s => s.trim()).filter(Boolean).map(entry => {
+            // Match "task name(List Name)" — list name is in the last (...)
+            const match = entry.match(/^(.*)\(([^)]+)\)\s*$/);
+            if (match) return { name: match[1].trim(), list: match[2].trim() };
+            // No list found — treat whole string as task name, list = "Unknown"
+            return { name: entry, list: 'Unknown' };
+          });
+        }
+
+        dayData[dateTitle] = tasks;
+
+        tasks.forEach(t => {
+          if (t.list && !allLists.includes(t.list)) allLists.push(t.list);
+        });
+      });
+    }
+
+    setStatus('Loaded ' + Object.keys(dayData).length + ' days of data.');
+    buildUI();
+  } catch(e) {
+    setStatus('Fetch error: ' + e.message);
+  }
+}
+
+function buildUI() {
+  document.getElementById('main').style.display = 'block';
+  document.getElementById('placeholder').style.display = 'none';
+  buildFilters();
+  buildGrid();
+}
+
+function buildFilters() {
+  const bar = document.getElementById('filters');
+  bar.innerHTML = '';
+  const all = makeBtn('All lists', 'all', true);
+  bar.appendChild(all);
+  allLists.forEach(l => bar.appendChild(makeBtn(l, l, false)));
+  bar.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-list]');
+    if (!btn) return;
+    activeList = btn.dataset.list;
+    document.querySelectorAll('#filters button').forEach(b => b.classList.toggle('active', b === btn));
+    buildGrid();
+    document.getElementById('day-panel').style.display = 'none';
+  });
+}
+
+function makeBtn(label, val, active) {
+  const b = document.createElement('button');
+  b.className = 'filter-btn' + (active ? ' active' : '');
+  b.dataset.list = val;
+  if (val !== 'all') {
+    const idx = allLists.indexOf(val);
+    const dot = `<span class="list-dot" style="background:${LIST_COLORS[idx % LIST_COLORS.length]};display:inline-block;margin-right:4px;"></span>`;
+    b.innerHTML = dot + label;
+  } else {
+    b.textContent = label;
+  }
+  return b;
+}
+
+function filteredData() {
+  if (activeList === 'all') return dayData;
+  const out = {};
+  for (const [k, tasks] of Object.entries(dayData)) {
+    out[k] = tasks.filter(t => t.list === activeList);
+  }
+  return out;
+}
+
+function buildGrid() {
+  const data = filteredData();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const start = new Date(today); start.setDate(start.getDate() - 364);
+
+  const counts = Object.values(data).map(t => t.length);
+  const max = Math.max(...counts, 1);
+  const total = counts.reduce((a,b) => a+b, 0);
+  const best  = Math.max(...counts, 0);
+  let activeDays = 0, streak = 0;
+  for (let i = 0; i <= 364; i++) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const k = d.toISOString().slice(0,10);
+    if ((data[k]||[]).length > 0) { if (i === streak) streak++; activeDays++; }
+  }
+
+  document.getElementById('stat-total').textContent  = total;
+  document.getElementById('stat-best').textContent   = best;
+  document.getElementById('stat-streak').textContent = streak + (streak === 1 ? ' d' : ' d');
+  document.getElementById('stat-active').textContent = activeDays;
+
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const pal = isDark ? COLORS_DARK : COLORS_LIGHT;
+
+  function color(count) {
+    if (count === 0) return pal[0];
+    return pal[Math.min(Math.ceil((count/max)*(pal.length-1)), pal.length-1)];
+  }
+
+  // Build legend
+  const leg = document.getElementById('legend'); leg.innerHTML = '';
+  pal.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'cell'; el.style.background = c; el.style.cursor = 'default';
+    leg.appendChild(el);
+  });
+
+  // Day labels
+  const dayLab = document.getElementById('day-labels'); dayLab.innerHTML = '';
+  ['','M','','W','','F',''].forEach(d => {
+    const el = document.createElement('div'); el.className = 'day-label'; el.textContent = d;
+    dayLab.appendChild(el);
+  });
+
+  // Build weeks
+  const startDay = start.getDay();
+  const startPadded = new Date(start); startPadded.setDate(startPadded.getDate() - startDay);
+  const weeks = [];
+  let cur = new Date(startPadded);
+  while (cur <= today) {
+    const week = [];
+    for (let d = 0; d < 7; d++) { week.push(new Date(cur)); cur.setDate(cur.getDate()+1); }
+    weeks.push(week);
+  }
+
+  const grid = document.getElementById('grid'); grid.innerHTML = '';
+  const monthRow = document.getElementById('month-labels'); monthRow.innerHTML = '';
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let lastMonth = -1;
+
+  weeks.forEach(week => {
+    const firstInRange = week.find(d => d >= start && d <= today);
+    if (firstInRange) {
+      const m = firstInRange.getMonth();
+      const ml = document.createElement('div'); ml.className = 'month-label';
+      if (m !== lastMonth) { ml.textContent = MONTHS[m]; lastMonth = m; }
+      monthRow.appendChild(ml);
+    } else {
+      monthRow.appendChild(document.createElement('div'));
+    }
+
+    const col = document.createElement('div'); col.className = 'col';
+    week.forEach(day => {
+      const cell = document.createElement('div'); cell.className = 'cell';
+      const inRange = day >= start && day <= today;
+      const key = day.toISOString().slice(0,10);
+      const tasks = inRange ? (data[key]||[]) : [];
+      cell.style.background = inRange ? color(tasks.length) : 'transparent';
+      if (inRange) {
+        cell.title = `${key}: ${tasks.length} completed`;
+        cell.addEventListener('click', () => showPanel(key, tasks));
+      } else {
+        cell.style.cursor = 'default';
+      }
+      col.appendChild(cell);
+    });
+    grid.appendChild(col);
+  });
+}
+
+function showPanel(key, tasks) {
+  document.getElementById('day-panel').style.display = 'block';
+  const date = new Date(key + 'T12:00:00');
+  document.getElementById('panel-date').textContent =
+    date.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric'}) +
+    ' — ' + tasks.length + ' completed';
+
+  const container = document.getElementById('panel-tasks');
+  if (!tasks.length) {
+    container.innerHTML = '<p class="empty">No tasks logged for this day.</p>'; return;
+  }
+  container.innerHTML = tasks.map((t,i) => {
+    const listIdx = allLists.indexOf(t.list);
+    const dotColor = listIdx >= 0 ? LIST_COLORS[listIdx % LIST_COLORS.length] : '#888';
+    return `<div class="task-item">
+      <div class="check"><div class="check-inner"></div></div>
+      <span>${t.name || 'Untitled'}</span>
+      <span class="list-tag">
+        <span class="list-dot" style="background:${dotColor}"></span>${t.list || ''}
+      </span>
+    </div>`;
+  }).join('');
+}
+
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+</script>
+</body>
+</html>
