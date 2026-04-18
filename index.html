@@ -260,7 +260,7 @@ function buildGrid() {
     const parts = latestKey.split('-');
     today.setFullYear(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
   }
-  const start = new Date(today); start.setDate(start.getDate() - 364);
+  const start = new Date(today); start.setDate(start.getDate() - 365);
 
   const counts = Object.values(data).map(t => t.length);
   const max = Math.max(...counts, 1);
