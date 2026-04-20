@@ -360,44 +360,102 @@ function buildMonthView(year, month) {
 function buildYearView() {
   const data = fd();
   const max = getMax(data);
-  const grid = document.getElementById('year-grid'); grid.innerHTML = '';
-  for (let m = 0; m < 12; m++) {
-    const wrap = document.createElement('div');
-    const title = document.createElement('div');
-    title.className = 'mini-month-title';
-    title.textContent = MONTHS_SHORT[m]+' '+viewYear;
-    title.onclick = () => {
-      viewMonth = m; showYear = false;
-      document.getElementById('year-view').style.display = 'none';
-      document.getElementById('month-view').style.display = 'block';
-      document.getElementById('year-btn').textContent = 'View full year';
-      document.getElementById('prev-btn').disabled = false;
-      document.getElementById('next-btn').disabled = false;
-      render();
-    };
-    wrap.appendChild(title);
-    const mg = document.createElement('div'); mg.className = 'mini-grid';
-    ['M','T','W','T','F','S','S'].forEach(d => {
-      const h = document.createElement('div');
-      h.style.cssText = 'font-size:8px;color:#aaa;text-align:center;';
-      h.textContent = d; mg.appendChild(h);
-    });
-    const firstDay = new Date(viewYear, m, 1);
-    let sd = firstDay.getDay(); sd = sd===0?6:sd-1;
-    const dim = new Date(viewYear, m+1, 0).getDate();
-    for (let i = 0; i < sd; i++) { const sp = document.createElement('div'); mg.appendChild(sp); }
-    for (let d = 1; d <= dim; d++) {
-      const key = `${viewYear}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const tasks = data[key] || [];
-      const color = cellColor(tasks.length, max);
-      const cell = document.createElement('div');
-      cell.className = 'mini-cell';
-      cell.style.background = color || (matchMedia('(prefers-color-scheme: dark)').matches ? '#1e1e1e' : '#f1efed');
-      cell.addEventListener('click', () => showPanel(key, tasks));
-      mg.appendChild(cell);
-    }
-    wrap.appendChild(mg); grid.appendChild(wrap);
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const pal = isDark ? COLORS_D : COLORS_L;
+
+  const container = document.getElementById('year-grid');
+  container.innerHTML = '';
+  container.style.cssText = 'overflow-x:auto;padding-bottom:6px;';
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:inline-flex;gap:0;align-items:flex-start;min-width:max-content;';
+
+  // Day labels column
+  const dayLab = document.createElement('div');
+  dayLab.style.cssText = 'display:flex;flex-direction:column;margin-right:4px;padding-top:18px;';
+  ['','M','','W','','F',''].forEach(d => {
+    const el = document.createElement('div');
+    el.style.cssText = 'height:16px;font-size:10px;color:#aaa;display:flex;align-items:center;line-height:1;';
+    el.textContent = d;
+    dayLab.appendChild(el);
+  });
+  wrap.appendChild(dayLab);
+
+  const right = document.createElement('div');
+
+  // Build week columns spanning the full year
+  const endDate = new Date(today);
+  endDate.setDate(endDate.getDate() + 2);
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - 365);
+
+  const startSunday = new Date(startDate);
+  startSunday.setDate(startSunday.getDate() - startSunday.getDay());
+
+  const weeks = [];
+  let cur = new Date(startSunday);
+  while (cur <= endDate) {
+    const week = [];
+    for (let d = 0; d < 7; d++) { week.push(new Date(cur)); cur.setDate(cur.getDate()+1); }
+    weeks.push(week);
   }
+
+  // Month label row
+  const monthRow = document.createElement('div');
+  monthRow.style.cssText = 'display:flex;height:18px;margin-bottom:2px;';
+  const CELL = 16;
+  let lastMonth = -1, prevWi = 0;
+  const monthPositions = [];
+  weeks.forEach((week, wi) => {
+    const firstVisible = week.find(d => d >= startDate && d <= endDate);
+    if (!firstVisible) return;
+    const m = firstVisible.getMonth();
+    if (m !== lastMonth) { monthPositions.push({month: m, weekIndex: wi}); lastMonth = m; }
+  });
+  monthPositions.forEach((mp) => {
+    const gap = mp.weekIndex - prevWi;
+    if (gap > 0) {
+      const sp = document.createElement('div');
+      sp.style.cssText = `width:${gap*CELL}px;flex-shrink:0;`;
+      monthRow.appendChild(sp);
+    }
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-size:10px;color:#aaa;white-space:nowrap;flex-shrink:0;';
+    lbl.textContent = MONTHS_SHORT[mp.month];
+    monthRow.appendChild(lbl);
+    prevWi = mp.weekIndex + 1;
+  });
+  right.appendChild(monthRow);
+
+  // Grid columns
+  const gridCols = document.createElement('div');
+  gridCols.style.cssText = 'display:flex;';
+  weeks.forEach(week => {
+    const col = document.createElement('div');
+    col.style.cssText = 'display:flex;flex-direction:column;';
+    week.forEach(day => {
+      const inRange = day >= startDate && day <= endDate;
+      const cell = document.createElement('div');
+      cell.style.cssText = 'width:13px;height:13px;margin:1.5px;border-radius:2px;';
+      if (!inRange) {
+        cell.style.background = 'transparent';
+        cell.style.cursor = 'default';
+      } else {
+        const key = day.toISOString().slice(0,10);
+        const tasks = data[key] || [];
+        const count = tasks.length;
+        cell.style.background = count === 0 ? pal[0] : pal[Math.min(Math.ceil((count/max)*(pal.length-1)), pal.length-1)];
+        cell.style.cursor = 'pointer';
+        cell.title = `${key}: ${count} completed`;
+        cell.addEventListener('click', () => showPanel(key, tasks));
+      }
+      col.appendChild(cell);
+    });
+    gridCols.appendChild(col);
+  });
+  right.appendChild(gridCols);
+  wrap.appendChild(right);
+  container.appendChild(wrap);
 }
 
 function toggleYearView() {
